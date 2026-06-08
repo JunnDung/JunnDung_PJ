@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type AuditInput = {
@@ -7,13 +8,13 @@ type AuditInput = {
   metadata?: Record<string, unknown>;
 };
 
-function sanitize(metadata: Record<string, unknown> | undefined) {
+function sanitize(metadata: Record<string, unknown> | undefined): Prisma.InputJsonValue | undefined {
   if (!metadata) return undefined;
 
   const blocked = new Set(["password", "token", "cookie", "authorization", "session"]);
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => !blocked.has(key.toLowerCase()))
-  );
+  ) as Prisma.InputJsonValue;
 }
 
 export async function auditLog({ actorId, action, target, metadata }: AuditInput) {

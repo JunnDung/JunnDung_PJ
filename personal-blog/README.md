@@ -1,36 +1,126 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Private Margins
 
-## Getting Started
+Fullstack personal editorial blog built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and Supabase Postgres.
 
-First, run the development server:
+## Features
+
+- Editorial homepage and long-form post pages
+- Search API backed by Postgres
+- Newsletter subscriptions stored in DB
+- Admin login with HttpOnly cookie sessions
+- Admin CMS for articles
+- Bookmarks for logged-in users
+- Sitemap, robots, JSON-LD metadata
+- Security headers, same-origin mutation guard, basic rate limiting
+- Vercel-ready build setup
+
+## Local setup
+
+```bash
+npm install
+cp .env.example .env
+```
+
+Edit `.env` with Supabase Postgres URLs and a strong admin password.
+
+Generate Prisma client:
+
+```bash
+npx prisma generate
+```
+
+Apply schema and seed sample data:
+
+```bash
+npx prisma migrate dev --name init
+npm run db:seed
+```
+
+Run dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```txt
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Admin
 
-## Learn More
+Login page:
 
-To learn more about Next.js, take a look at the following resources:
+```txt
+/login
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Admin pages:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```txt
+/admin
+/admin/articles
+/admin/articles/new
+/admin/newsletter
+/admin/audit
+/admin/security
+```
 
-## Deploy on Vercel
+Admin credentials come from `.env`:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```env
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="replace-with-a-long-random-password"
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Use a 20+ character password for demo deploys.
+
+## Vercel deploy
+
+Set these Environment Variables in Vercel:
+
+```env
+DATABASE_URL="postgresql://...pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres"
+NEXT_PUBLIC_SITE_URL="https://your-project.vercel.app"
+NEXT_PUBLIC_SUPABASE_URL="https://PROJECT_REF.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="sb_publishable_xxx"
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="replace-with-a-long-random-password"
+IMAGE_ALLOWED_HOSTS="images.unsplash.com"
+```
+
+Build command is configured through `npm run build`, which runs Prisma generate first.
+
+Before deploy:
+
+```bash
+npx prisma validate
+npx prisma generate
+npx prisma migrate dev --name init
+npm run db:seed
+npm run build
+```
+
+Do not run seed automatically on every Vercel deploy. Seed once from local or Supabase SQL workflow.
+
+## Security notes
+
+- Rotate any DB password that was shared outside secret storage.
+- `.env*` is gitignored; never commit real secrets.
+- Mutating API routes check same-origin requests.
+- Admin pages require DB-backed admin sessions.
+- CSP is report-only by default to avoid breaking the demo; inspect console before enforcing.
+- Rate limiting is in-memory, enough for a small CV demo. Use Redis/Upstash for high-traffic production.
+
+## Useful commands
+
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+npx prisma studio
+npm run db:seed
+```

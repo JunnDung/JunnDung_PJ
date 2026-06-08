@@ -3,34 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ArticleStatus } from "@prisma/client";
-import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
+import { safeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { assertSameOriginAction } from "@/lib/security/request";
 import type { ArticleSection } from "@/lib/article-types";
-
-const sectionSchema = z.array(
-  z.object({
-    id: z.string().min(1),
-    title: z.string().min(1),
-    paragraphs: z.array(z.string().min(1)).min(1)
-  })
-);
-
-const articleSchema = z.object({
-  title: z.string().min(2).max(180),
-  slug: z.string().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  excerpt: z.string().min(10).max(500),
-  category: z.string().min(2).max(80),
-  readTime: z.string().min(2).max(40),
-  author: z.string().min(2).max(120),
-  authorAvatar: z.string().url(),
-  coverImage: z.string().url(),
-  status: z.nativeEnum(ArticleStatus),
-  featured: z.boolean(),
-  publishedAt: z.string().optional(),
-  tags: z.array(z.string().min(1)).min(1),
-  sections: sectionSchema
-});
+import {
+  articleIdSchema,
+  articleInputSchema,
+  normalizeTags,
+  parseSectionsJson,
+  type ArticleInput
+} from "@/lib/validation/article";
 
 function slugify(value: string) {
   return value
@@ -41,16 +25,12 @@ function slugify(value: string) {
     .replace(/-+/g, "-");
 }
 
-function getFormData(formData: FormData) {
+function getFormData(formData: FormData): ArticleInput {
   const title = String(formData.get("title") ?? "");
-  const rawSections = String(formData.get("sections") ?? "[]");
-  const sections = JSON.parse(rawSections) as ArticleSection[];
-  const tags = String(formData.get("tags") ?? "")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  const sections = parseSectionsJson(String(formData.get("sections") ?? "[]"));
+  const tags = normalizeTags(String(formData.get("tags") ?? "").split(","));
 
-  return articleSchema.parse({
+  return articleInputSchema.parse({
     title,
     slug: String(formData.get("slug") || slugify(title)),
     excerpt: String(formData.get("excerpt") ?? ""),
@@ -79,18 +59,24 @@ function buildSearchText(article: { title: string; excerpt: string; category: st
     .toLowerCase();
 }
 
-async function syncTags(tags: string[]) {
-  for (const tag of tags) {
-    await prisma.tag.upsert({ where: { name: tag }, update: {}, create: { name: tag } });
+function toPublishedAt(data: ArticleInput) {
+  if (data.status === ArticleStatus.PUBLISHED) {
+    return new Date(data.publishedAt || Date.now());
   }
+
+  return data.publishedAt ? new Date(data.publishedAt) : null;
 }
 
 export async function createArticle(formData: FormData) {
+  await assertSameOriginAction();
   const admin = await requireAdmin();
   const data = getFormData(formData);
-  await syncTags(data.tags);
 
   await prisma.$transaction(async (tx) => {
+    for (const tag of data.tags) {
+      await tx.tag.upsert({ where: { name: tag }, update: {}, create: { name: tag } });
+    }
+
     if (data.featured) {
       await tx.article.updateMany({ data: { featured: false } });
     }
@@ -107,14 +93,21 @@ export async function createArticle(formData: FormData) {
         coverImage: data.coverImage,
         featured: data.featured,
         status: data.status,
-        publishedAt: data.status === ArticleStatus.PUBLISHED ? new Date(data.publishedAt || Date.now()) : data.publishedAt ? new Date(data.publishedAt) : null,
+        publishedAt: toPublishedAt(data),
         sections: data.sections,
         searchText: buildSearchText(data),
         tags: { connect: data.tags.map((tag) => ({ name: tag })) }
       }
     });
 
-    await tx.auditLog.create({ data: { actorId: admin.id, action: "article.create", target: article.id } });
+    await tx.auditLog.create({
+      data: {
+        actorId: admin.id,
+        action: "article.create",
+        target: article.id,
+        metadata: { slug: article.slug, status: article.status }
+      }
+    });
   });
 
   revalidatePath("/");
@@ -123,17 +116,25 @@ export async function createArticle(formData: FormData) {
 }
 
 export async function updateArticle(id: string, formData: FormData) {
+  await assertSameOriginAction();
   const admin = await requireAdmin();
+  const articleId = articleIdSchema.parse(id);
   const data = getFormData(formData);
-  await syncTags(data.tags);
 
   await prisma.$transaction(async (tx) => {
+    const existing = await tx.article.findUnique({ where: { id: articleId }, select: { id: true } });
+    if (!existing) throw new Error("Article not found");
+
+    for (const tag of data.tags) {
+      await tx.tag.upsert({ where: { name: tag }, update: {}, create: { name: tag } });
+    }
+
     if (data.featured) {
-      await tx.article.updateMany({ where: { id: { not: id } }, data: { featured: false } });
+      await tx.article.updateMany({ where: { id: { not: articleId } }, data: { featured: false } });
     }
 
     await tx.article.update({
-      where: { id },
+      where: { id: articleId },
       data: {
         slug: data.slug,
         title: data.title,
@@ -145,14 +146,21 @@ export async function updateArticle(id: string, formData: FormData) {
         coverImage: data.coverImage,
         featured: data.featured,
         status: data.status,
-        publishedAt: data.status === ArticleStatus.PUBLISHED ? new Date(data.publishedAt || Date.now()) : data.publishedAt ? new Date(data.publishedAt) : null,
+        publishedAt: toPublishedAt(data),
         sections: data.sections,
         searchText: buildSearchText(data),
         tags: { set: [], connect: data.tags.map((tag) => ({ name: tag })) }
       }
     });
 
-    await tx.auditLog.create({ data: { actorId: admin.id, action: "article.update", target: id } });
+    await tx.auditLog.create({
+      data: {
+        actorId: admin.id,
+        action: "article.update",
+        target: articleId,
+        metadata: { slug: data.slug, status: data.status }
+      }
+    });
   });
 
   revalidatePath("/");
@@ -162,9 +170,12 @@ export async function updateArticle(id: string, formData: FormData) {
 }
 
 export async function archiveArticle(id: string) {
+  await assertSameOriginAction();
   const admin = await requireAdmin();
-  await prisma.article.update({ where: { id }, data: { status: ArticleStatus.ARCHIVED, featured: false } });
-  await prisma.auditLog.create({ data: { actorId: admin.id, action: "article.archive", target: id } });
+  const articleId = articleIdSchema.parse(id);
+
+  await prisma.article.update({ where: { id: articleId }, data: { status: ArticleStatus.ARCHIVED, featured: false } });
+  await safeAuditLog({ actorId: admin.id, action: "article.archive", target: articleId });
   revalidatePath("/");
   redirect("/admin/articles");
 }

@@ -12,8 +12,11 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 
-if (env.NODE_ENV === "production" && !env.NEXT_PUBLIC_SITE_URL.startsWith("https://")) {
-  throw new Error("NEXT_PUBLIC_SITE_URL must use https:// in production");
+const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL);
+const isLocalSite = siteUrl.hostname === "localhost" || siteUrl.hostname === "127.0.0.1";
+
+if (env.NODE_ENV === "production" && !isLocalSite && siteUrl.protocol !== "https:") {
+  throw new Error("NEXT_PUBLIC_SITE_URL must use https:// outside local builds");
 }
 
 export const trustedOrigins = Array.from(
