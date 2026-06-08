@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { limitSearch, rateLimitResponse } from "@/lib/rate-limit";
 import { searchArticles } from "@/lib/articles";
 
 const searchSchema = z.object({
@@ -12,12 +12,8 @@ const searchSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const ip = getClientIp(request);
-  const limit = rateLimit(`search:${ip}`, 60, 60_000);
-
-  if (!limit.allowed) {
-    return NextResponse.json({ error: "Too many search requests" }, { status: 429 });
-  }
+  const limit = limitSearch(request);
+  if (!limit.allowed) return rateLimitResponse(limit.resetAt);
 
   const url = new URL(request.url);
   const parsed = searchSchema.safeParse(Object.fromEntries(url.searchParams));

@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { limitNewsletter, rateLimitResponse } from "@/lib/rate-limit";
+import { assertSameOriginRequest } from "@/lib/security/request";
 
 const newsletterSchema = z.object({
-  email: z.string().email().max(254),
+  email: z.string().email().max(254).transform((value) => value.toLowerCase()),
   name: z.string().max(120).optional(),
   website: z.string().max(200).optional()
 });
 
 export async function POST(request: Request) {
-  const ip = getClientIp(request);
-  const limit = rateLimit(`newsletter:${ip}`, 5, 60 * 60 * 1000);
-
-  if (!limit.allowed) {
-    return NextResponse.json({ error: "Too many subscription attempts" }, { status: 429 });
-  }
+  const originError = assertSameOriginRequest(request);
+  if (originError) return originError;
 
   const json = await request.json().catch(() => null);
   const parsed = newsletterSchema.safeParse(json);
@@ -28,16 +25,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const email = parsed.data.email.toLowerCase();
+  const limit = limitNewsletter(request, parsed.data.email);
+  if (!limit.allowed) return rateLimitResponse(limit.resetAt);
 
   await prisma.newsletterSubscriber.upsert({
-    where: { email },
+    where: { email: parsed.data.email },
     update: {
       name: parsed.data.name,
       unsubscribedAt: null
     },
     create: {
-      email,
+      email: parsed.data.email,
       name: parsed.data.name
     }
   });
