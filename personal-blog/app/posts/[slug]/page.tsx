@@ -16,6 +16,7 @@ import {
   getRelatedArticles
 } from "@/lib/articles";
 import { prisma } from "@/lib/prisma";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 type PostPageProps = {
   params: Promise<{
@@ -23,7 +24,7 @@ type PostPageProps = {
   }>;
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export async function generateStaticParams() {
   const articles = await getAllArticles();
@@ -86,7 +87,7 @@ export default async function PostPage({ params }: PostPageProps) {
   return (
     <main>
       <PostProgressBar />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }} />
 
       <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
         <header className="mx-auto max-w-3xl py-10 text-center reveal-up">

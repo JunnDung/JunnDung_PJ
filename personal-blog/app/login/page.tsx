@@ -30,7 +30,9 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(searchParams.get("next") ?? "/admin");
+    const next = searchParams.get("next");
+    const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/admin";
+    router.push(safeNext);
     router.refresh();
   }
 

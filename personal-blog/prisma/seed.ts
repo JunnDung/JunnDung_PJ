@@ -18,7 +18,11 @@ function buildSearchText(article: (typeof articles)[number]) {
 
 async function main() {
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "change-me-now";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "";
+
+  if (adminPassword.length < 12) {
+    throw new Error("ADMIN_PASSWORD must be at least 12 characters long before seeding admin user.");
+  }
 
   await prisma.user.upsert({
     where: { email: adminEmail.toLowerCase() },
