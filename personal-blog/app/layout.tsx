@@ -3,7 +3,8 @@ import { Inter, Merriweather } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getAllArticles, siteConfig } from "@/data/articles";
+import { getAllArticles } from "@/lib/articles";
+import { siteConfig } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -47,15 +48,17 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const articles = await getAllArticles();
+
   return (
     <html lang="en" className={`${inter.variable} ${merriweather.variable}`} suppressHydrationWarning>
-      <body className="min-h-screen bg-[var(--background)] font-sans text-[var(--foreground)] antialiased">
-        <Header articles={getAllArticles()} />
+      <body suppressHydrationWarning className="min-h-screen bg-[var(--background)] font-sans text-[var(--foreground)] antialiased">
+        <Header articles={articles} />
         {children}
         <Footer />
       </body>

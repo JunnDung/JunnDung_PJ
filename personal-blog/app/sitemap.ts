@@ -1,7 +1,10 @@
 import type { MetadataRoute } from "next";
-import { getAllArticles, siteConfig } from "@/data/articles";
+import { getAllArticles } from "@/lib/articles";
+import { siteConfig } from "@/lib/site";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const articles = await getAllArticles();
+
   return [
     {
       url: siteConfig.url,
@@ -9,7 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1
     },
-    ...getAllArticles().map((article) => ({
+    ...articles.map((article) => ({
       url: `${siteConfig.url}/posts/${article.slug}`,
       lastModified: new Date(article.publishedDate),
       changeFrequency: "monthly" as const,

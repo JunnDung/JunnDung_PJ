@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Article } from "@/data/articles";
+import type { Article } from "@/lib/article-types";
 import ArticleCard from "@/components/ArticleCard";
 import TopicPills from "@/components/TopicPills";
 

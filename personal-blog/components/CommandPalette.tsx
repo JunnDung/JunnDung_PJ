@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { Article } from "@/data/articles";
+import type { Article } from "@/lib/article-types";
 
 type CommandPaletteProps = {
   articles: Article[];

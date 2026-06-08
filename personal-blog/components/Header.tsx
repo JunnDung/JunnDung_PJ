@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import CommandPalette from "@/components/CommandPalette";
-import type { Article } from "@/data/articles";
+import type { Article } from "@/lib/article-types";
 
 const navLinks = [
   { href: "/", label: "Home" },

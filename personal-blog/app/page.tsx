@@ -3,11 +3,26 @@ import ArticleCard from "@/components/ArticleCard";
 import FeaturedPost from "@/components/FeaturedPost";
 import SearchFilterPanel from "@/components/SearchFilterPanel";
 import SubscribeBox from "@/components/SubscribeBox";
-import { getAllArticles, getFeaturedArticle, getTopics } from "@/data/articles";
+import { getAllArticles, getFeaturedArticle, getTopics } from "@/lib/articles";
 
-export default function HomePage() {
-  const featured = getFeaturedArticle();
-  const allArticles = getAllArticles();
+export const revalidate = 60;
+
+export default async function HomePage() {
+  const [featured, allArticles, topics] = await Promise.all([
+    getFeaturedArticle(),
+    getAllArticles(),
+    getTopics()
+  ]);
+
+  if (!featured) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 py-20 text-center">
+        <h1 className="font-serif text-4xl font-black text-slate-950">No articles yet</h1>
+        <p className="mt-4 text-slate-500">Seed database to publish first essays.</p>
+      </main>
+    );
+  }
+
   const remaining = allArticles.filter((article) => article.slug !== featured.slug);
   const popular = remaining.slice(0, 3);
 
@@ -21,11 +36,11 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white/80 p-5">
-              <p className="font-serif text-3xl font-black text-slate-950">8</p>
+              <p className="font-serif text-3xl font-black text-slate-950">{allArticles.length}</p>
               <p className="mt-1 text-sm text-slate-500">long-form essays</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white/80 p-5">
-              <p className="font-serif text-3xl font-black text-slate-950">10</p>
+              <p className="font-serif text-3xl font-black text-slate-950">{Math.max(topics.length - 1, 0)}</p>
               <p className="mt-1 text-sm text-slate-500">research topics</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white/80 p-5">
@@ -36,7 +51,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <SearchFilterPanel articles={remaining} topics={getTopics()} />
+      <SearchFilterPanel articles={remaining} topics={topics} />
 
       <section className="mx-auto max-w-5xl px-5 py-4 sm:px-8">
         <SubscribeBox />

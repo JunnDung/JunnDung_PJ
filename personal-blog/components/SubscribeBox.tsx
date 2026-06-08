@@ -2,24 +2,31 @@
 
 import { FormEvent, useState } from "react";
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export default function SubscribeBox() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "error" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
+  const [message, setMessage] = useState("No spam. Just thoughtful writing.");
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setStatus("loading");
+    setMessage("Saving your seat in the private notes...");
 
-    if (!emailPattern.test(email)) {
+    const response = await fetch("/api/newsletter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
       setStatus("error");
+      setMessage(data?.error ?? "Subscription failed. Try again.");
       return;
     }
 
-    const subscribers = JSON.parse(window.localStorage.getItem("private-margins-subscribers") ?? "[]") as string[];
-    const next = Array.from(new Set([...subscribers, email.toLowerCase()]));
-    window.localStorage.setItem("private-margins-subscribers", JSON.stringify(next));
     setStatus("success");
+    setMessage("You are on the private notes list.");
     setEmail("");
   }
 
@@ -52,6 +59,7 @@ export default function SubscribeBox() {
             onChange={(event) => {
               setEmail(event.target.value);
               setStatus("idle");
+              setMessage("No spam. Just thoughtful writing.");
             }}
             placeholder="you@example.com"
             aria-invalid={status === "error"}
@@ -60,16 +68,15 @@ export default function SubscribeBox() {
           />
           <button
             type="submit"
-            className="min-h-12 rounded-full bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+            disabled={status === "loading"}
+            className="min-h-12 rounded-full bg-slate-900 px-6 text-sm font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Subscribe
+            {status === "loading" ? "Subscribing..." : "Subscribe"}
           </button>
         </form>
 
         <p id="subscribe-status" className="mt-4 text-xs text-slate-500" aria-live="polite">
-          {status === "success" && "You are on the private notes list."}
-          {status === "error" && "Enter a valid email address."}
-          {status === "idle" && "No spam. Just thoughtful writing."}
+          {message}
         </p>
       </div>
     </section>

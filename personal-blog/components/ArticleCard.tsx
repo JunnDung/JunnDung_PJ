@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Article } from "@/data/articles";
+import type { Article } from "@/lib/article-types";
 
 const categoryStyles: Record<string, string> = {
   Essays: "bg-stone-100 text-stone-700",
