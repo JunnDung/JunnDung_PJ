@@ -1,63 +1,58 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE = "private_margins_session";
 const SESSION_DAYS = 30;
 const MAX_SESSIONS_PER_USER = 5;
 
-async function sha256(value: string) {
-  const data = new TextEncoder().encode(value);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function randomToken() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+async function getJwtSecret() {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is not set");
+  return new TextEncoder().encode(secret);
 }
 
 function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    sameSite: "strict" as const,
     path: "/",
     expires: expiresAt,
     priority: "high" as const
   };
 }
 
-export async function createSession(userId: string) {
-  const token = randomToken();
-  const tokenHash = await sha256(token);
+export async function createSession(userId: string, role: string, email?: string) {
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-
-  await prisma.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
-  await prisma.session.create({ data: { tokenHash, userId, expiresAt } });
-
-  const sessions = await prisma.session.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    skip: MAX_SESSIONS_PER_USER,
-    select: { id: true }
-  });
-
-  if (sessions.length) {
-    await prisma.session.deleteMany({ where: { id: { in: sessions.map((session) => session.id) } } });
-  }
+  const secret = await getJwtSecret();
+  const jwt = await new SignJWT({ userId, role, ...(email && { email }) })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime(expiresAt)
+    .setIssuedAt()
+    .sign(secret);
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
+  cookieStore.set(SESSION_COOKIE, jwt, sessionCookieOptions(expiresAt));
 }
 
 export async function destroySession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
 
-  if (token) await prisma.session.deleteMany({ where: { tokenHash: await sha256(token) } });
+  if (token) {
+    try {
+      const secret = await getJwtSecret();
+      const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] });
+      if (payload.userId) {
+        await prisma.session.deleteMany({ where: { userId: payload.userId as string } });
+      }
+    } catch {
+      // invalid/expired JWT — nothing to revoke in DB
+    }
+  }
 
   cookieStore.set(SESSION_COOKIE, "", { ...sessionCookieOptions(new Date(0)), maxAge: 0 });
 }
@@ -68,21 +63,19 @@ export async function getCurrentUser() {
 
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { tokenHash: await sha256(token) },
-    include: { user: true }
-  });
-
-  if (!session) return null;
-
-  if (session.expiresAt < new Date()) {
-    await prisma.session.delete({ where: { id: session.id } }).catch(() => null);
-    cookieStore.set(SESSION_COOKIE, "", { ...sessionCookieOptions(new Date(0)), maxAge: 0 });
+  try {
+    const secret = await getJwtSecret();
+    const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] });
+    if (!payload.userId || !payload.role) return null;
+    return {
+      id: payload.userId as string,
+      email: (payload.email as string) || "",
+      role: payload.role as string,
+      name: null
+    };
+  } catch {
     return null;
   }
-
-  const { passwordHash: _passwordHash, ...safeUser } = session.user;
-  return safeUser;
 }
 
 export async function requireUser() {

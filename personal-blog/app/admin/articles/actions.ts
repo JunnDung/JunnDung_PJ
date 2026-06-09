@@ -125,6 +125,12 @@ export async function updateArticle(id: string, formData: FormData) {
     const existing = await tx.article.findUnique({ where: { id: articleId }, select: { id: true } });
     if (!existing) throw new Error("Article not found");
 
+    const slugConflict = await tx.article.findFirst({
+      where: { slug: data.slug, id: { not: articleId } },
+      select: { id: true }
+    });
+    if (slugConflict) throw new Error("Slug already in use by another article");
+
     for (const tag of data.tags) {
       await tx.tag.upsert({ where: { name: tag }, update: {}, create: { name: tag } });
     }

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
-  await createSession(user.id);
+  await createSession(user.id, user.role, user.email);
   await safeAuditLog({ actorId: user.id, action: "auth.login.success", target: user.id });
 
   return NextResponse.json({ ok: true, role: user.role });
