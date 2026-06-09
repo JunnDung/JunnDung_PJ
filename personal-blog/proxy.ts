@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify, SignJWT } from "jose";
+import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "private_margins_session";
 const ADMIN_PREFIX = "/admin";

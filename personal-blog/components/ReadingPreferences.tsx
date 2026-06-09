@@ -41,23 +41,18 @@ function applyPreferences(preferences: Preferences) {
 }
 
 export default function ReadingPreferences() {
-  const [preferences, setPreferences] = useState<Preferences>(defaults);
-
-  useEffect(() => {
+  const [preferences, setPreferences] = useState<Preferences>(() => {
+    if (typeof window === "undefined") return defaults;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Preferences;
-        setPreferences({ ...defaults, ...parsed });
-        applyPreferences({ ...defaults, ...parsed });
-        return;
-      }
-    } catch {
-      setPreferences(defaults);
-    }
+      if (stored) return { ...defaults, ...(JSON.parse(stored) as Preferences) };
+    } catch { /* fall through */ }
+    return defaults;
+  });
 
-    applyPreferences(defaults);
-  }, []);
+  useEffect(() => {
+    applyPreferences(preferences);
+  }, [preferences]);
 
   function updatePreferences(next: Partial<Preferences>) {
     const updated = { ...preferences, ...next };

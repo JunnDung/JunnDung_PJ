@@ -9,7 +9,6 @@ import ReadingPreferences from "@/components/ReadingPreferences";
 import TableOfContents from "@/components/TableOfContents";
 import { getCurrentUser } from "@/lib/auth";
 import {
-  getAllArticles,
   getArticleBySlug,
   getArticleStructuredData,
   getArticleUrl,
