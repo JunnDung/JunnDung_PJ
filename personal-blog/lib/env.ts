@@ -12,7 +12,10 @@ const envSchema = z.object({
 
 const FALLBACK_URL = "http://localhost:3000";
 
-function safeUrl(input: string) {
+function safeUrl(input: string): URL {
+  if (!input || typeof input !== "string") {
+    return new URL(FALLBACK_URL);
+  }
   try {
     return new URL(input);
   } catch {
@@ -34,8 +37,6 @@ function _val<T>(key: keyof z.infer<typeof envSchema>): T {
   return _parsed.data[key] as T;
 }
 
-const _siteUrl = () => safeUrl(_val<string>("NEXT_PUBLIC_SITE_URL"));
-
 export const env = {
   get NODE_ENV() { return _val<string>("NODE_ENV"); },
   get DATABASE_URL() { return _val<string | undefined>("DATABASE_URL"); },
@@ -46,9 +47,9 @@ export const env = {
   get IMAGE_ALLOWED_HOSTS() { return _val<string | undefined>("IMAGE_ALLOWED_HOSTS"); }
 };
 
-export const siteUrl = _siteUrl();
+export const siteUrl = () => safeUrl(env.NEXT_PUBLIC_SITE_URL);
 export const isLocalSite = () => {
-  const u = siteUrl;
+  const u = siteUrl();
   return u.hostname === "localhost" || u.hostname === "127.0.0.1";
 };
 
