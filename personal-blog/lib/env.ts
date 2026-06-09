@@ -12,7 +12,17 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 
-const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL);
+const FALLBACK_URL = "http://localhost:3000";
+
+function safeUrl(input: string) {
+  try {
+    return new URL(input);
+  } catch {
+    return new URL(FALLBACK_URL);
+  }
+}
+
+const siteUrl = safeUrl(env.NEXT_PUBLIC_SITE_URL);
 const isLocalSite = siteUrl.hostname === "localhost" || siteUrl.hostname === "127.0.0.1";
 
 if (env.NODE_ENV === "production" && !isLocalSite && siteUrl.protocol !== "https:") {

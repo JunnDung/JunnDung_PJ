@@ -1,5 +1,13 @@
 import { allowedImageHosts, env } from "@/lib/env";
 
+function safeUrl(input: string) {
+  try {
+    return new URL(input);
+  } catch {
+    return new URL("http://localhost:3000");
+  }
+}
+
 export function isAllowedImageUrl(value: string) {
   if (value.startsWith("/")) {
     return value.startsWith("/images/") || value.startsWith("/uploads/");
@@ -16,7 +24,7 @@ export function isAllowedImageUrl(value: string) {
   if (url.username || url.password) return false;
   if (url.href.length > 2000) return false;
 
-  const siteHost = new URL(env.NEXT_PUBLIC_SITE_URL).hostname;
+  const siteHost = safeUrl(env.NEXT_PUBLIC_SITE_URL).hostname;
   return url.hostname === siteHost || allowedImageHosts.includes(url.hostname);
 }
 
