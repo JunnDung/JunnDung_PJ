@@ -4,8 +4,8 @@ export default function AdminSecurityPage() {
   const rows = [
     { label: "Environment", value: env.NODE_ENV },
     { label: "Site URL", value: env.NEXT_PUBLIC_SITE_URL },
-    { label: "Trusted origins", value: trustedOrigins.join(", ") },
-    { label: "Allowed image hosts", value: allowedImageHosts.join(", ") },
+    { label: "Trusted origins", value: trustedOrigins().join(", ") },
+    { label: "Allowed image hosts", value: allowedImageHosts().join(", ") },
     { label: "Rate limiter", value: "local in-memory fallback" },
     { label: "CSP", value: "report-only" },
     { label: "Secrets", value: "loaded, not displayed" }

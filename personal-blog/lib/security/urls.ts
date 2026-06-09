@@ -25,7 +25,7 @@ export function isAllowedImageUrl(value: string) {
   if (url.href.length > 2000) return false;
 
   const siteHost = safeUrl(env.NEXT_PUBLIC_SITE_URL).hostname;
-  return url.hostname === siteHost || allowedImageHosts.includes(url.hostname);
+  return url.hostname === siteHost || allowedImageHosts().includes(url.hostname);
 }
 
 export function assertAllowedImageUrl(value: string) {

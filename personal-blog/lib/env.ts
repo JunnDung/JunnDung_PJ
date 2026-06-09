@@ -2,15 +2,13 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string().min(1).optional(),
-  DIRECT_URL: z.string().min(1).optional(),
-  NEXT_PUBLIC_SITE_URL: z.string().url().default("http://localhost:3000"),
-  AUTH_SECRET: z.string().min(32).optional(),
+  DATABASE_URL: z.string().optional(),
+  DIRECT_URL: z.string().optional(),
+  NEXT_PUBLIC_SITE_URL: z.string().default("http://localhost:3000"),
+  AUTH_SECRET: z.string().optional(),
   TRUSTED_ORIGINS: z.string().optional(),
   IMAGE_ALLOWED_HOSTS: z.string().optional()
 });
-
-export const env = envSchema.parse(process.env);
 
 const FALLBACK_URL = "http://localhost:3000";
 
@@ -22,33 +20,56 @@ function safeUrl(input: string) {
   }
 }
 
-const siteUrl = safeUrl(env.NEXT_PUBLIC_SITE_URL);
-const isLocalSite = siteUrl.hostname === "localhost" || siteUrl.hostname === "127.0.0.1";
+const _parsed = envSchema.safeParse(process.env);
 
-if (env.NODE_ENV === "production" && !isLocalSite && siteUrl.protocol !== "https:") {
-  throw new Error("NEXT_PUBLIC_SITE_URL must use https:// outside local builds");
+function _val<T>(key: keyof z.infer<typeof envSchema>): T {
+  if (!_parsed.success) {
+    if (typeof window === "undefined") {
+      throw new Error(
+        `Missing required environment variable: ${_parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`
+      );
+    }
+    return undefined as T;
+  }
+  return _parsed.data[key] as T;
 }
 
-export const trustedOrigins = Array.from(
-  new Set([
-    env.NEXT_PUBLIC_SITE_URL,
-    ...(env.TRUSTED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [])
-  ])
-);
+const _siteUrl = () => safeUrl(_val<string>("NEXT_PUBLIC_SITE_URL"));
 
-export const allowedImageHosts = Array.from(
-  new Set([
-    "images.unsplash.com",
-    ...(env.IMAGE_ALLOWED_HOSTS?.split(",").map((host) => host.trim()).filter(Boolean) ?? [])
-  ])
-);
+export const env = {
+  get NODE_ENV() { return _val<string>("NODE_ENV"); },
+  get DATABASE_URL() { return _val<string | undefined>("DATABASE_URL"); },
+  get DIRECT_URL() { return _val<string | undefined>("DIRECT_URL"); },
+  get NEXT_PUBLIC_SITE_URL() { return _val<string>("NEXT_PUBLIC_SITE_URL"); },
+  get AUTH_SECRET() { return _val<string | undefined>("AUTH_SECRET"); },
+  get TRUSTED_ORIGINS() { return _val<string | undefined>("TRUSTED_ORIGINS"); },
+  get IMAGE_ALLOWED_HOSTS() { return _val<string | undefined>("IMAGE_ALLOWED_HOSTS"); }
+};
+
+export const siteUrl = _siteUrl();
+export const isLocalSite = () => {
+  const u = siteUrl;
+  return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+};
+
+export const trustedOrigins = () =>
+  Array.from(
+    new Set([
+      env.NEXT_PUBLIC_SITE_URL,
+      ...(env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? [])
+    ])
+  );
+
+export const allowedImageHosts = () =>
+  Array.from(
+    new Set([
+      "images.unsplash.com",
+      ...(env.IMAGE_ALLOWED_HOSTS?.split(",").map((h) => h.trim()).filter(Boolean) ?? [])
+    ])
+  );
 
 export function getRequiredEnv(name: string) {
   const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }

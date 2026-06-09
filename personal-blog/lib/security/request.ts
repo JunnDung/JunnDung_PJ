@@ -14,7 +14,7 @@ function normalizeOrigin(value: string | null) {
 
 export function isTrustedOrigin(origin: string | null) {
   const normalized = normalizeOrigin(origin);
-  return Boolean(normalized && trustedOrigins.includes(normalized));
+  return Boolean(normalized && trustedOrigins().includes(normalized));
 }
 
 export function assertSameOriginRequest(request: Request) {
