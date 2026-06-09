@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE = "private_margins_session";
 const SESSION_DAYS = 30;
-const MAX_SESSIONS_PER_USER = 5;
 
 async function getJwtSecret() {
   const secret = process.env.AUTH_SECRET;

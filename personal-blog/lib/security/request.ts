@@ -25,7 +25,6 @@ export function assertSameOriginRequest(request: Request) {
   }
 
   const origin = request.headers.get("origin");
-  const referer = request.headers.get("referer");
 
   if (isTrustedOrigin(origin)) {
     return null;
@@ -37,7 +36,6 @@ export function assertSameOriginRequest(request: Request) {
 export async function assertSameOriginAction() {
   const headerStore = await headers();
   const origin = headerStore.get("origin");
-  const referer = headerStore.get("referer");
 
   if (!isTrustedOrigin(origin)) {
     throw new Error("Forbidden origin");

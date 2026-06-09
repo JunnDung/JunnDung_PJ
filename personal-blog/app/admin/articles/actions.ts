@@ -73,6 +73,12 @@ export async function createArticle(formData: FormData) {
   const data = getFormData(formData);
 
   await prisma.$transaction(async (tx) => {
+    const slugConflict = await tx.article.findFirst({
+      where: { slug: data.slug },
+      select: { id: true }
+    });
+    if (slugConflict) throw new Error("Slug already in use");
+
     for (const tag of data.tags) {
       await tx.tag.upsert({ where: { name: tag }, update: {}, create: { name: tag } });
     }
