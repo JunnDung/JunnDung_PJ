@@ -25,11 +25,7 @@ type PostPageProps = {
 };
 
 export const dynamic = "force-dynamic";
-
-export async function generateStaticParams() {
-  const articles = await getAllArticles();
-  return articles.map((article) => ({ slug: article.slug }));
-}
+export const revalidate = 0;
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
   const { slug } = await params;

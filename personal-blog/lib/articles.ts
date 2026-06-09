@@ -52,66 +52,96 @@ const articleInclude = {
   }
 };
 
-export async function getAllArticles({ includeDrafts = false } = {}) {
-  const articles = await prisma.article.findMany({
-    where: includeDrafts ? undefined : { status: ArticleStatus.PUBLISHED },
-    include: articleInclude,
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }]
-  });
+async function safePrismaQuery<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    console.error("[DB] Query failed, using fallback:", error);
+    return fallback;
+  }
+}
 
-  return articles.map(toArticleView);
+export async function getAllArticles({ includeDrafts = false } = {}) {
+  return safePrismaQuery(
+    async () => {
+      const articles = await prisma.article.findMany({
+        where: includeDrafts ? undefined : { status: ArticleStatus.PUBLISHED },
+        include: articleInclude,
+        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }]
+      });
+      return articles.map(toArticleView);
+    },
+    []
+  );
 }
 
 export async function getTopics() {
-  const categories = await prisma.article.findMany({
-    where: { status: ArticleStatus.PUBLISHED },
-    distinct: ["category"],
-    select: { category: true },
-    orderBy: { category: "asc" }
-  });
-
-  return ["All", ...categories.map((item) => item.category)];
+  return safePrismaQuery(
+    async () => {
+      const categories = await prisma.article.findMany({
+        where: { status: ArticleStatus.PUBLISHED },
+        distinct: ["category"],
+        select: { category: true },
+        orderBy: { category: "asc" }
+      });
+      return ["All", ...categories.map((item) => item.category)];
+    },
+    ["All"]
+  );
 }
 
 export async function getFeaturedArticle() {
-  const article = await prisma.article.findFirst({
-    where: { status: ArticleStatus.PUBLISHED, featured: true },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" }
-  });
+  return safePrismaQuery(
+    async () => {
+      const article = await prisma.article.findFirst({
+        where: { status: ArticleStatus.PUBLISHED, featured: true },
+        include: articleInclude,
+        orderBy: { publishedAt: "desc" }
+      });
 
-  if (article) {
-    return toArticleView(article);
-  }
+      if (article) {
+        return toArticleView(article);
+      }
 
-  const fallback = await prisma.article.findFirst({
-    where: { status: ArticleStatus.PUBLISHED },
-    include: articleInclude,
-    orderBy: { publishedAt: "desc" }
-  });
+      const fallback = await prisma.article.findFirst({
+        where: { status: ArticleStatus.PUBLISHED },
+        include: articleInclude,
+        orderBy: { publishedAt: "desc" }
+      });
 
-  return fallback ? toArticleView(fallback) : null;
+      return fallback ? toArticleView(fallback) : null;
+    },
+    null
+  );
 }
 
 export async function getArticleBySlug(slug: string, { includeDrafts = false } = {}) {
-  const article = await prisma.article.findFirst({
-    where: {
-      slug,
-      ...(includeDrafts ? {} : { status: ArticleStatus.PUBLISHED })
+  return safePrismaQuery(
+    async () => {
+      const article = await prisma.article.findFirst({
+        where: {
+          slug,
+          ...(includeDrafts ? {} : { status: ArticleStatus.PUBLISHED })
+        },
+        include: articleInclude
+      });
+      return article ? toArticleView(article) : null;
     },
-    include: articleInclude
-  });
-
-  return article ? toArticleView(article) : null;
+    null
+  );
 }
 
 export async function getArticleById(id: string) {
-  const article = await prisma.article.findUnique({
-    where: { id },
-    include: articleInclude
-  });
-
-  return article ? toArticleView(article) : null;
+  return safePrismaQuery(
+    async () => {
+      const article = await prisma.article.findUnique({
+        where: { id },
+        include: articleInclude
+      });
+      return article ? toArticleView(article) : null;
+    },
+    null
+  );
 }
 
 export function getArticleUrl(slug: string) {
@@ -146,39 +176,44 @@ function readTimeValue(readTime: string) {
 }
 
 export async function searchArticles({ q = "", topic = "All", sort = "latest", page = 1, pageSize = 12 }: SearchOptions) {
-  const normalizedQuery = q.trim().toLowerCase();
-  const skip = (page - 1) * pageSize;
+  return safePrismaQuery(
+    async () => {
+      const normalizedQuery = q.trim().toLowerCase();
+      const skip = (page - 1) * pageSize;
 
-  const where = {
-    status: ArticleStatus.PUBLISHED,
-    ...(topic && topic !== "All" ? { category: topic } : {}),
-    ...(normalizedQuery ? { searchText: { contains: normalizedQuery, mode: "insensitive" as const } } : {})
-  };
+      const where = {
+        status: ArticleStatus.PUBLISHED,
+        ...(topic && topic !== "All" ? { category: topic } : {}),
+        ...(normalizedQuery ? { searchText: { contains: normalizedQuery, mode: "insensitive" as const } } : {})
+      };
 
-  const [total, rows] = await Promise.all([
-    prisma.article.count({ where }),
-    prisma.article.findMany({
-      where,
-      include: articleInclude,
-      orderBy: sort === "title" ? { title: "asc" } : { publishedAt: "desc" },
-      skip,
-      take: pageSize
-    })
-  ]);
+      const [total, rows] = await Promise.all([
+        prisma.article.count({ where }),
+        prisma.article.findMany({
+          where,
+          include: articleInclude,
+          orderBy: sort === "title" ? { title: "asc" } : { publishedAt: "desc" },
+          skip,
+          take: pageSize
+        })
+      ]);
 
-  const items = rows.map(toArticleView);
+      const items = rows.map(toArticleView);
 
-  if (sort === "readTime") {
-    items.sort((a, b) => readTimeValue(a.readTime) - readTimeValue(b.readTime));
-  }
+      if (sort === "readTime") {
+        items.sort((a, b) => readTimeValue(a.readTime) - readTimeValue(b.readTime));
+      }
 
-  return {
-    items,
-    total,
-    page,
-    pageSize,
-    hasMore: skip + items.length < total
-  };
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        hasMore: skip + items.length < total
+      };
+    },
+    { items: [], total: 0, page, pageSize, hasMore: false }
+  );
 }
 
 export function getArticleStructuredData(article: Article) {
